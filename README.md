@@ -1,6 +1,6 @@
-# CI/CD Final Project – Counter Service
+# CI/CD Final Project
 
-**Project name:** CI/CD Final Project – Counter Service
+**Project name:** CI/CD Final Project (repository: `cicd-final-project`)
 **Author:** Youness El Bardani
 **Course:** Continuous Integration and Continuous Delivery (CI/CD) – Coursera Final Project
 

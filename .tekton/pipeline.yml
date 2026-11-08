@@ -12,7 +12,7 @@ spec:
   params:
     - name: GIT_REPO
       type: string
-      default: https://github.com/elbardaniyouness-cpu/CI-CD.git
+      default: https://github.com/elbardaniyouness-cpu/cicd-final-project.git
     - name: GIT_REF
       type: string
       default: main
