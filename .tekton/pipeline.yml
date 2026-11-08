@@ -16,9 +16,6 @@ spec:
     - name: GIT_REF
       type: string
       default: main
-    - name: APP_NAME
-      type: string
-      default: counter-service
     - name: IMAGE
       type: string
       description: e.g. image-registry.openshift-image-registry.svc:5000/<namespace>/counter-service:latest
@@ -88,5 +85,6 @@ spec:
       params:
         - name: SCRIPT
           value: |
-            oc create deployment $(params.APP_NAME) --image=$(params.IMAGE) --dry-run=client -o yaml | oc apply -f -
-            oc rollout restart deployment/$(params.APP_NAME) || true
+            # App name is fixed (not interpolated); image is quoted
+            oc create deployment counter-service --image='$(params.IMAGE)' --dry-run=client -o yaml | oc apply -f -
+            oc rollout restart deployment/counter-service || true
