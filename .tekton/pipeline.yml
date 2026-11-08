@@ -1,4 +1,33 @@
 ---
+# flake8 task (defined here so the pipeline does not depend on Tekton Hub).
+# Arguments are passed via an environment variable, not interpolated into the script.
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: flake8
+spec:
+  workspaces:
+    - name: source
+  params:
+    - name: args
+      type: string
+      default: "--count --max-complexity=10 --max-line-length=127 --statistics"
+  steps:
+    - name: lint
+      image: python:3.9-slim
+      workingDir: $(workspaces.source.path)
+      env:
+        - name: FLAKE8_ARGS
+          value: $(params.args)
+      script: |
+        #!/bin/sh
+        set -e
+        python -m pip install -q --upgrade pip
+        pip install -q flake8
+        # shellcheck disable=SC2086
+        flake8 service $FLAKE8_ARGS
+
+---
 # Deploy task: the image reference is passed via an environment variable
 # (never interpolated into the script) and validated before use.
 apiVersion: tekton.dev/v1beta1
@@ -25,9 +54,7 @@ spec:
         oc rollout restart deployment/counter-service || true
 
 ---
-# OpenShift Pipeline: cleanup -> git-clone -> flake8 -> nose -> buildah -> deploy
-# Uses the cluster-provided tasks git-clone and buildah,
-# and the flake8 task from Tekton Hub (tkn hub install task flake8).
+# OpenShift Pipeline: cleanup -> git-clone -> flake8 + nose -> buildah -> deploy
 apiVersion: tekton.dev/v1beta1
 kind: Pipeline
 metadata:
@@ -38,13 +65,10 @@ spec:
   params:
     - name: GIT_REPO
       type: string
-      default: https://github.com/elbardaniyouness-cpu/cicd-final-project.git
+      default: https://github.com/elbardaniyouness-cpu/CI-CD.git
     - name: GIT_REF
       type: string
       default: main
-    - name: IMAGE
-      type: string
-      description: e.g. image-registry.openshift-image-registry.svc:5000/<namespace>/counter-service:latest
   tasks:
     - name: cleanup
       taskRef:
@@ -74,11 +98,6 @@ spec:
       workspaces:
         - name: source
           workspace: output
-      params:
-        - name: image
-          value: python:3.9-slim
-        - name: args
-          value: ["--count", "--max-complexity=10", "--max-line-length=127", "--statistics"]
 
     - name: nose
       runAfter: [git-clone]
@@ -101,7 +120,7 @@ spec:
           workspace: output
       params:
         - name: IMAGE
-          value: $(params.IMAGE)
+          value: image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/counter-service:latest
 
     - name: deploy
       runAfter: [buildah]
@@ -109,4 +128,4 @@ spec:
         name: deploy-image
       params:
         - name: IMAGE
-          value: $(params.IMAGE)
+          value: image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/counter-service:latest
