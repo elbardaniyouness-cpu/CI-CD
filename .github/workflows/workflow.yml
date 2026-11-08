@@ -1,32 +1,32 @@
-name: CI Pipeline
+name: CI workflow
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ main ]
+    branches: [ "main" ]
 
 jobs:
-  lint-and-test:
+  build:
     runs-on: ubuntu-latest
+    container: python:3.9-slim
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.9"
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
-          pip install flake8 nose
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Run lint
+      - name: Lint with flake8
         run: |
-          flake8 .
+          # stop the build if there are Python syntax errors or undefined names
+          flake8 service --count --select=E9,F63,F7,F82 --show-source --statistics
+          # treat all other issues as errors too, using the limits from setup.cfg
+          flake8 service --count --max-complexity=10 --max-line-length=127 --statistics
 
-      - name: Run tests
+      - name: Run unit tests with nose
         run: |
-          nosetests
+          nosetests -v --with-spec --spec-color --with-coverage --cover-package=service

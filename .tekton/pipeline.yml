@@ -1,0 +1,92 @@
+---
+# OpenShift Pipeline: cleanup -> git-clone -> flake8 -> nose -> buildah -> deploy
+# Uses the cluster-provided tasks git-clone, buildah and openshift-client,
+# and the flake8 task from Tekton Hub (tkn hub install task flake8).
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: oc-final
+spec:
+  workspaces:
+    - name: output
+  params:
+    - name: GIT_REPO
+      type: string
+      default: https://github.com/elbardaniyouness-cpu/CI-CD.git
+    - name: GIT_REF
+      type: string
+      default: main
+    - name: APP_NAME
+      type: string
+      default: counter-service
+    - name: IMAGE
+      type: string
+      description: e.g. image-registry.openshift-image-registry.svc:5000/<namespace>/counter-service:latest
+  tasks:
+    - name: cleanup
+      taskRef:
+        name: cleanup
+      workspaces:
+        - name: source
+          workspace: output
+
+    - name: git-clone
+      runAfter: [cleanup]
+      taskRef:
+        name: git-clone
+        kind: ClusterTask
+      workspaces:
+        - name: output
+          workspace: output
+      params:
+        - name: url
+          value: $(params.GIT_REPO)
+        - name: revision
+          value: $(params.GIT_REF)
+
+    - name: flake8
+      runAfter: [git-clone]
+      taskRef:
+        name: flake8
+      workspaces:
+        - name: source
+          workspace: output
+      params:
+        - name: image
+          value: python:3.9-slim
+        - name: args
+          value: ["--count", "--max-complexity=10", "--max-line-length=127", "--statistics"]
+
+    - name: nose
+      runAfter: [git-clone]
+      taskRef:
+        name: nose
+      workspaces:
+        - name: source
+          workspace: output
+      params:
+        - name: args
+          value: "-v --with-spec --spec-color"
+
+    - name: buildah
+      runAfter: [flake8, nose]
+      taskRef:
+        name: buildah
+        kind: ClusterTask
+      workspaces:
+        - name: source
+          workspace: output
+      params:
+        - name: IMAGE
+          value: $(params.IMAGE)
+
+    - name: deploy
+      runAfter: [buildah]
+      taskRef:
+        name: openshift-client
+        kind: ClusterTask
+      params:
+        - name: SCRIPT
+          value: |
+            oc create deployment $(params.APP_NAME) --image=$(params.IMAGE) --dry-run=client -o yaml | oc apply -f -
+            oc rollout restart deployment/$(params.APP_NAME) || true

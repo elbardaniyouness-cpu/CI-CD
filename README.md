@@ -1,56 +1,78 @@
-# CI/CD Final Project (Python)
+# CI/CD Final Project – Counter Service
 
-This project demonstrates a complete Continuous Integration and Continuous Delivery (CI/CD) pipeline for a Python application.
+**Project name:** CI/CD Final Project – Counter Service
+**Author:** Youness El Bardani
+**Course:** Continuous Integration and Continuous Delivery (CI/CD) – Coursera Final Project
 
-## Project Overview
+This project builds and deploys a complete CI/CD pipeline for a small Python Flask
+microservice (the **Counter Service**). Code is linted and tested on every push with
+**GitHub Actions**, and built and deployed to an **OpenShift** cluster by a
+**Tekton / OpenShift Pipeline**.
 
-The pipeline was built using the following tools:
+## The application
 
-- **GitHub Actions** for Continuous Integration
-- **Tekton** for task creation and execution
-- **OpenShift Pipelines** for orchestrating the CI/CD workflow
-- **OpenShift Cluster** for application deployment
+A REST API that keeps named counters in memory.
 
-## CI Pipeline
+| Method | Endpoint           | Description         |
+|--------|--------------------|---------------------|
+| GET    | `/health`          | Health check        |
+| GET    | `/`                | Service information |
+| GET    | `/counters`        | List all counters   |
+| POST   | `/counters/<name>` | Create a counter    |
+| GET    | `/counters/<name>` | Read a counter      |
+| PUT    | `/counters/<name>` | Increment a counter |
+| DELETE | `/counters/<name>` | Delete a counter    |
 
-The Continuous Integration pipeline includes:
+## Repository layout
 
-1. **Linting** the Python source code
-2. **Running unit tests** to validate the application
+```
+.github/workflows/workflow.yml   GitHub Actions CI: lint with flake8, run unit tests with nose
+.tekton/tasks.yml                Custom Tekton tasks: cleanup, nose
+.tekton/pipeline.yml             OpenShift pipeline "oc-final"
+.tekton/pvc.yml                  PersistentVolumeClaim used as the pipeline workspace
+service/                         Flask application source
+tests/                           Unit tests
+Dockerfile                       Container image (gunicorn on port 8000)
+requirements.txt                 Python dependencies
+setup.cfg                        flake8 / nose / coverage settings
+```
 
-These steps are automated using **GitHub Actions**.
+## Continuous Integration (GitHub Actions)
 
-## Tekton Tasks
+`.github/workflows/workflow.yml` runs on every push and pull request to `main`
+inside a `python:3.9-slim` container:
 
-The following Tekton tasks were created:
+1. **Checkout**
+2. **Install dependencies**
+3. **Lint with flake8**
+4. **Run unit tests with nose** (with coverage)
 
-- **Lint Task** – checks code quality
-- **Unit Test Task** – runs the Python test suite
-- **Build Image Task** – builds the container image
-- **Deploy Task** – deploys the application to OpenShift
+## Tekton tasks
 
-## OpenShift Pipeline
+- **cleanup** – empties the shared workspace before each run
+- **nose** – installs requirements and runs `nosetests`
 
-An OpenShift pipeline was created to execute the tasks in the following order:
+The pipeline also uses the cluster tasks **git-clone**, **flake8**, **buildah**
+and **openshift-client**.
 
-1. Lint
-2. Unit Test
-3. Build Image
-4. Deploy Application
+## OpenShift Pipeline (`oc-final`)
 
-## Deployment
+```
+cleanup -> git-clone -> flake8 ─┐
+                     └-> nose ──┴-> buildah -> deploy
+```
 
-The final step of the pipeline deploys the Python application to the OpenShift cluster.
+## Running locally
 
-## Technologies Used
+```bash
+python3.9 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+flake8 service
+nosetests -v --with-spec --spec-color --with-coverage --cover-package=service
+gunicorn --bind=0.0.0.0:8000 service:app
+```
 
-- Python
-- GitHub Actions
-- Tekton
-- OpenShift Pipelines
-- OpenShift Cluster
-- Container Image Build
+## Technologies
 
-## Purpose
-
-The purpose of this project is to apply CI/CD concepts by automating code validation, testing, building, and deployment in a cloud-native environment.
+Python 3.9 · Flask · gunicorn · flake8 · nose · GitHub Actions · Tekton ·
+OpenShift Pipelines · Buildah
