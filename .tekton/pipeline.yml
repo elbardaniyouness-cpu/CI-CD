@@ -1,6 +1,32 @@
 ---
+# Deploy task: the image reference is passed via an environment variable
+# (never interpolated into the script) and validated before use.
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: deploy-image
+spec:
+  params:
+    - name: IMAGE
+      type: string
+  steps:
+    - name: deploy
+      image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+      env:
+        - name: IMAGE
+          value: $(params.IMAGE)
+      script: |
+        #!/bin/sh
+        set -eu
+        case "$IMAGE" in
+          ""|*[!A-Za-z0-9./:@_-]*) echo "Invalid image reference" >&2; exit 1 ;;
+        esac
+        oc create deployment counter-service --image="$IMAGE" --dry-run=client -o yaml | oc apply -f -
+        oc rollout restart deployment/counter-service || true
+
+---
 # OpenShift Pipeline: cleanup -> git-clone -> flake8 -> nose -> buildah -> deploy
-# Uses the cluster-provided tasks git-clone, buildah and openshift-client,
+# Uses the cluster-provided tasks git-clone and buildah,
 # and the flake8 task from Tekton Hub (tkn hub install task flake8).
 apiVersion: tekton.dev/v1beta1
 kind: Pipeline
@@ -80,11 +106,7 @@ spec:
     - name: deploy
       runAfter: [buildah]
       taskRef:
-        name: openshift-client
-        kind: ClusterTask
+        name: deploy-image
       params:
-        - name: SCRIPT
-          value: |
-            # App name is fixed (not interpolated); image is quoted
-            oc create deployment counter-service --image='$(params.IMAGE)' --dry-run=client -o yaml | oc apply -f -
-            oc rollout restart deployment/counter-service || true
+        - name: IMAGE
+          value: $(params.IMAGE)
